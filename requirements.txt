@@ -11,6 +11,10 @@ plotly>=5.17.0
 # Statistical and ML libraries
 scipy>=1.11.0
 scikit-learn>=1.3.0
+statsmodels
+ 
+# Excel support
+openpyxl
 
 # Database
 pymongo>=4.5.0
