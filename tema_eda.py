@@ -140,7 +140,7 @@ def cerinta_1():
                     else:
                         val_range = st.slider(f"Gama {col}", min_v, max_v, (min_v, max_v), step=0.1, format="%.1f", key=f"s_{col}")
                     
-                    # MODIFICARE AICI: Pastram valorile nule folosind | df_filtered[col].isna()
+            
                     condition = ((df_filtered[col] >= val_range[0]) & (df_filtered[col] <= val_range[1])) | (df_filtered[col].isna())
                     df_filtered = df_filtered[condition]
 
@@ -149,10 +149,9 @@ def cerinta_1():
             cat_cols = df.select_dtypes(include=['object']).columns
             for col in cat_cols:
                 options = df[col].unique().tolist()
-                # Pentru multiselect, tratam valorile nule daca exista in optiuni
+              
                 selected = st.multiselect(f"Selectează {col}", options, default=options, key=f"m_{col}")
                 
-                # MODIFICARE AICI: Pastram valorile nule si la categoriile care nu sunt selectate (sau raman in df)
                 condition_cat = (df_filtered[col].isin(selected)) | (df_filtered[col].isna())
                 df_filtered = df_filtered[condition_cat]
 
@@ -332,8 +331,6 @@ def cerinta_5():
         v1 = col_s1.selectbox("Variabila X", num_cols, index=0, key="x5")
         v2 = col_s2.selectbox("Variabila Y", num_cols, index=min(1, len(num_cols)-1), key="y5")
         
-        # SOLUTIE FINALA PENTRU DuplicateError:
-        # Cream un DataFrame nou cu nume de coloane unice, indiferent daca v1 == v2
         df_plot = pd.DataFrame({
             'Axa_X': df[v1],
             'Axa_Y': df[v2]
@@ -344,7 +341,7 @@ def cerinta_5():
             x='Axa_X', 
             y='Axa_Y', 
             trendline="ols", 
-            labels={'Axa_X': v1, 'Axa_Y': v2}, # Redenumim label-urile pe grafic sa arate frumos
+            labels={'Axa_X': v1, 'Axa_Y': v2}, 
             color_discrete_sequence=[PERIWINKLE], 
             title=f"Scatter: {v1} vs {v2}"
         )
