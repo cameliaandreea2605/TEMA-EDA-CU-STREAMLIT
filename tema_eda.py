@@ -90,6 +90,15 @@ def pagina_descriere():
     st.write("În concluzie, aplicația dezvoltată oferă un instrument complet și interactiv pentru analiza exploratorie a datelor, respectând toate cerințele impuse în temă. Prin utilizarea Streamlit și Plotly, aceasta facilitează înțelegerea rapidă a dataseturilor și susține procesul de luare a deciziilor bazate pe date.")
     st.markdown('</div>', unsafe_allow_html=True)
 
+    # --- SECTIUNE SEMNATURA ---
+    st.markdown(f"""
+        <div style="text-align: center; margin-top: 3rem; padding: 1rem; border-top: 1px solid #eee;">
+            <p style="color: #666; font-size: 1.1rem; font-style: italic;">
+                Autor Proiect: <span style="color: {PERIWINKLE}; font-weight: 700;">Camelia-Andreea Mărginean</span> | Grupa 1127 BDSA
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+
 # --- CERINTA 1: INCARCARE SI FILTRARE ---
 def cerinta_1():
     st.markdown('<h1 class="main-header">Cerinta 1: Incarcare si Filtrare</h1>', unsafe_allow_html=True)
@@ -130,15 +139,22 @@ def cerinta_1():
                         val_range = st.slider(f"Gama {col}", int(min_v), int(max_v), (int(min_v), int(max_v)), step=1, key=f"s_{col}")
                     else:
                         val_range = st.slider(f"Gama {col}", min_v, max_v, (min_v, max_v), step=0.1, format="%.1f", key=f"s_{col}")
-                    df_filtered = df_filtered[(df_filtered[col] >= val_range[0]) & (df_filtered[col] <= val_range[1])]
+                    
+                    # MODIFICARE AICI: Pastram valorile nule folosind | df_filtered[col].isna()
+                    condition = ((df_filtered[col] >= val_range[0]) & (df_filtered[col] <= val_range[1])) | (df_filtered[col].isna())
+                    df_filtered = df_filtered[condition]
 
         with col_f2:
             st.markdown(f'<p style="color:{PERIWINKLE}; font-weight:600; font-size:1.1rem;">Filtre Categorice</p>', unsafe_allow_html=True)
             cat_cols = df.select_dtypes(include=['object']).columns
             for col in cat_cols:
                 options = df[col].unique().tolist()
+                # Pentru multiselect, tratam valorile nule daca exista in optiuni
                 selected = st.multiselect(f"Selectează {col}", options, default=options, key=f"m_{col}")
-                df_filtered = df_filtered[df_filtered[col].isin(selected)]
+                
+                # MODIFICARE AICI: Pastram valorile nule si la categoriile care nu sunt selectate (sau raman in df)
+                condition_cat = (df_filtered[col].isin(selected)) | (df_filtered[col].isna())
+                df_filtered = df_filtered[condition_cat]
 
         st.markdown(f"""
             <div style="margin: 30px 0 20px 0; padding: 10px 5px;">
@@ -300,7 +316,7 @@ def cerinta_4():
             st.dataframe(counts, use_container_width=True)
         else: st.warning("Nu există coloane categorice.")
 
-# --- CERINTA 5 ---
+# --- CERINTA 5: CORELAȚIE ȘI OUTLIERI ---
 def cerinta_5():
     st.markdown('<h1 class="main-header">Cerinta 5: Corelatie si Outlieri</h1>', unsafe_allow_html=True)
     df = st.session_state['df']
@@ -316,29 +332,53 @@ def cerinta_5():
         v1 = col_s1.selectbox("Variabila X", num_cols, index=0, key="x5")
         v2 = col_s2.selectbox("Variabila Y", num_cols, index=min(1, len(num_cols)-1), key="y5")
         
-        if v1 == v2:
-            st.warning("Selectează variabile diferite.")
-        else:
-            df_scat = df[[v1, v2]].dropna()
-            fig_scatter = px.scatter(df_scat, x=v1, y=v2, trendline="ols", 
-                                     color_discrete_sequence=[PERIWINKLE], title=f"Scatter: {v1} vs {v2}")
-            st.plotly_chart(fig_scatter, use_container_width=True)
-            corr_val, _ = pearsonr(df_scat[v1], df_scat[v2])
-            st.metric("Coeficient Pearson", f"{corr_val:.4f}")
+        # SOLUTIE FINALA PENTRU DuplicateError:
+        # Cream un DataFrame nou cu nume de coloane unice, indiferent daca v1 == v2
+        df_plot = pd.DataFrame({
+            'Axa_X': df[v1],
+            'Axa_Y': df[v2]
+        }).dropna()
+
+        fig_scatter = px.scatter(
+            df_plot, 
+            x='Axa_X', 
+            y='Axa_Y', 
+            trendline="ols", 
+            labels={'Axa_X': v1, 'Axa_Y': v2}, # Redenumim label-urile pe grafic sa arate frumos
+            color_discrete_sequence=[PERIWINKLE], 
+            title=f"Scatter: {v1} vs {v2}"
+        )
+        st.plotly_chart(fig_scatter, use_container_width=True)
+        
+        # Calcul Pearson
+        corr_val, _ = pearsonr(df_plot['Axa_X'], df_plot['Axa_Y'])
+        st.metric("Coeficient Pearson", f"{corr_val:.4f}")
 
         st.divider()
         st.write("### Detecție Outlieri (Metoda IQR)")
+        
         out_res = []
         for col in num_cols:
             q1, q3 = df[col].quantile(0.25), df[col].quantile(0.75)
             iqr = q3 - q1
-            n_out = len(df[(df[col] < q1 - 1.5*iqr) | (df[col] > q3 + 1.5*iqr)])
-            out_res.append({"Coloana": col, "Nr. Outlieri": n_out, "Procent (%)": f"{(n_out/len(df)*100):.2f}%"})
+            low_limit = q1 - 1.5 * iqr
+            up_limit = q3 + 1.5 * iqr
+            
+            n_out = len(df[(df[col] < low_limit) | (df[col] > up_limit)])
+            perc_out = (n_out / len(df) * 100)
+            
+            out_res.append({
+                "Coloană": col, 
+                "Nr. Outlieri": n_out, 
+                "Procent Outlieri (%)": round(perc_out, 2),
+                "Limită Inferioară": round(low_limit, 2),
+                "Limită Superioară": round(up_limit, 2)
+            })
         
-        st.dataframe(pd.DataFrame(out_res), use_container_width=True)
+        st.dataframe(pd.DataFrame(out_res), use_container_width=True, hide_index=True)
+        
         sel_box = st.selectbox("Vizualizare grafică outlieri:", num_cols, key="box_out")
         st.plotly_chart(px.box(df, y=sel_box, points="outliers", color_discrete_sequence=[PEACH]), use_container_width=True)
-
 # --- MAIN ---
 selected = sidebar_navigation()
 
